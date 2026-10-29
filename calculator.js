@@ -267,23 +267,21 @@ let selectedRowIndex = -1;
             updateCurrentUI();
         }
         
-        // TIMER LOGIC
+        // TIMER LOGIC (Updated to bypass browser background throttling)
         function startHypoTimer() {
             document.getElementById("start-timer-btn").style.display = "none";
             const timerDisplay = document.getElementById("timer-display");
             timerDisplay.style.display = "block";
             timerDisplay.innerText = "30:00";
             
-            let timeLeft = 30 * 60; 
+            // Calculate the exact absolute time 30 minutes from right now
+            const durationInSeconds = 30 * 60;
+            const endTime = Date.now() + (durationInSeconds * 1000);
             
             clearInterval(timerInterval);
             timerInterval = setInterval(function() {
-                timeLeft--;
-                let minutes = Math.floor(timeLeft / 60);
-                let seconds = timeLeft % 60;
-                
-                if (seconds < 10) seconds = "0" + seconds;
-                timerDisplay.innerText = `${minutes}:${seconds}`;
+                // Calculate actual time left based on the system clock, not browser ticks
+                let timeLeft = Math.round((endTime - Date.now()) / 1000);
                 
                 if (timeLeft <= 0) {
                     clearInterval(timerInterval);
@@ -291,7 +289,15 @@ let selectedRowIndex = -1;
                     timerDisplay.style.color = "#ff3333";
                     document.getElementById("alarm-sound").play();
                     document.getElementById("stop-alarm-btn").style.display = "inline-block";
+                    return;
                 }
+
+                let minutes = Math.floor(timeLeft / 60);
+                let seconds = timeLeft % 60;
+                
+                if (seconds < 10) seconds = "0" + seconds;
+                timerDisplay.innerText = `${minutes}:${seconds}`;
+                
             }, 1000);
         }
         
