@@ -167,4 +167,4 @@
             document.getElementById("result-box").style.display = "none";
             document.querySelectorAll(".cell-btn").forEach(btn => btn.classList.remove("selected", "target"));
         }
-    </script>
+</script>
