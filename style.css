@@ -1,4 +1,4 @@
-        body { font-family: Arial, sans-serif; padding: 20px; margin: auto; background-color: #f8f9fa; }
+body { font-family: Arial, sans-serif; padding: 20px; margin: auto; background-color: #f8f9fa; }
         
         #header-box { text-align: center; margin-bottom: 20px; }
         .disclaimer { color: #dc3545; font-size: 12px; font-weight: bold; margin-bottom: 20px; }
@@ -14,8 +14,19 @@
         
         .btn-calc { padding: 10px 20px; font-size: 18px; background: #0056b3; color: white; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; }
         .btn-calc:hover { background: #004494; }
+        
+        .btn-new-start { padding: 10px 20px; font-size: 16px; background: #17a2b8; color: white; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; }
+        .btn-new-start:hover { background: #138496; }
+        
         .btn-reset { padding: 10px 20px; font-size: 16px; background: #6c757d; color: white; border: none; border-radius: 5px; cursor: pointer; }
         
+        /* Timer Buttons */
+        .btn-timer { padding: 10px 20px; font-size: 18px; background: #dc3545; color: white; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; width: 100%; max-width: 300px; margin: auto; display: block; }
+        .btn-timer:hover { background: #c82333; }
+        
+        .btn-stop-alarm { padding: 10px 20px; font-size: 18px; background: #000; color: #ff3333; border: 2px solid #ff3333; border-radius: 5px; cursor: pointer; font-weight: bold; animation: flashRed 1s infinite; width: 100%; max-width: 300px; margin: 15px auto auto auto; display: block;}
+        @keyframes flashRed { 0% { background: #000; } 50% { background: #ff3333; color: #fff;} 100% { background: #000; } }
+
         #result-box {
             display: none; width: 100%; margin-top: 15px; padding: 15px; border-radius: 5px; font-size: 18px;
         }
