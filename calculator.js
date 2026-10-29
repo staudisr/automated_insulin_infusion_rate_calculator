@@ -1,5 +1,6 @@
-        let selectedRowIndex = -1;
+let selectedRowIndex = -1;
         let selectedColIndex = -1;
+        let timerInterval;
 
         // Build Table
         const headerRow = document.getElementById("table-headers");
@@ -19,12 +20,30 @@
             tbody.appendChild(tr);
         });
 
-        // Grid Click Listener
+        // Unlock Inputs without needing grid selection (For New Starts)
+        document.getElementById("new-fsbs").addEventListener("input", function() {
+            if(this.value.length > 0) {
+                document.getElementById("start-btn").disabled = false;
+                if(selectedColIndex !== -1) {
+                    document.getElementById("calc-btn").disabled = false;
+                }
+            } else {
+                document.getElementById("start-btn").disabled = true;
+                document.getElementById("calc-btn").disabled = true;
+            }
+        });
+        
+        // Initial unlock of FSBS box to allow New Starts without grid clicking
+        document.getElementById("new-fsbs").disabled = false;
+
+        // Grid Click Listener (For Adjustments)
         document.querySelector("tbody").addEventListener("click", function(e) {
             if (e.target && e.target.nodeName === "BUTTON") {
                 // Remove previous selection
                 document.querySelectorAll(".cell-btn").forEach(btn => btn.classList.remove("selected", "target"));
                 document.getElementById("result-box").style.display = "none";
+                clearInterval(timerInterval); // stop any running timer
+                document.getElementById("alarm-sound").pause();
                 
                 // Highlight new selection
                 e.target.classList.add("selected");
@@ -36,10 +55,9 @@
                 
                 document.getElementById("display-current").innerText = `${currentVal} ml/hr (Column ${selectedColIndex}, Row ${rowLabel})`;
                 
-                // Enable inputs
-                document.getElementById("new-fsbs").disabled = false;
-                document.getElementById("new-fsbs").focus();
-                document.getElementById("calc-btn").disabled = false;
+                if(document.getElementById("new-fsbs").value.length > 0) {
+                    document.getElementById("calc-btn").disabled = false;
+                }
             }
         });
 
@@ -74,19 +92,75 @@
             if (remaining > 0) {
                 total += gridData[rowIndex][remaining];
             }
-            // Round to 1 decimal place to prevent JS floating point weirdness
             return Math.round(total * 10) / 10;
         }
-
-        // Main Calculator Logic
-        function calculateNewRate() {
+        
+        // NEW START LOGIC
+        function calculateNewStart() {
             const newFSBS = parseInt(document.getElementById("new-fsbs").value);
             const resultBox = document.getElementById("result-box");
+            const resultText = document.getElementById("result-text");
+            const timerContainer = document.getElementById("timer-container");
             
             if (isNaN(newFSBS) || newFSBS < 10) {
                 alert("Please enter a valid FSBS number.");
                 return;
             }
+            
+            clearInterval(timerInterval);
+            document.getElementById("alarm-sound").pause();
+            timerContainer.style.display = "none";
+            document.querySelectorAll(".cell-btn").forEach(btn => btn.classList.remove("selected", "target"));
+            
+            let targetRowIndex = getRowIndex(newFSBS);
+            
+            // Protocol: New starts always begin in Column 2
+            let targetColIndex = 2;
+            let finalRate = (newFSBS < 110) ? 0 : getRateValue(targetRowIndex, targetColIndex);
+            
+            resultBox.className = "result-success";
+            resultBox.style.display = "block";
+            
+            if (newFSBS < 110) {
+                resultBox.className = "result-danger";
+                resultText.innerHTML = `<strong>ACTION REQUIRED: DO NOT START INFUSION.</strong><br>FSBS is < 110. Recheck in 30 minutes. Once FSBS > 120, you will start the drip in Column 2 for that specific FSBS.`;
+                timerContainer.style.display = "block";
+                document.getElementById("start-timer-btn").style.display = "inline-block";
+                document.getElementById("timer-display").style.display = "none";
+                document.getElementById("stop-alarm-btn").style.display = "none";
+            } else {
+                resultText.innerHTML = `<strong>NEW START RATE: ${finalRate} ml/hr</strong> (Column 2, Row ${gridData[targetRowIndex][0]})<br><br><strong>Why:</strong> New continuous insulin infusions always begin in Column 2.`;
+            }
+            
+            // Highlight target
+            if (targetColIndex <= 16 && newFSBS >= 110) {
+                document.querySelectorAll(".cell-btn").forEach(btn => {
+                    if (parseInt(btn.getAttribute("data-rindex")) === targetRowIndex && parseInt(btn.getAttribute("data-col")) === targetColIndex) {
+                        btn.classList.add("target");
+                    }
+                });
+            }
+        }
+
+        // ADJUSTMENT LOGIC (Existing)
+        function calculateNewRate() {
+            const newFSBS = parseInt(document.getElementById("new-fsbs").value);
+            const resultBox = document.getElementById("result-box");
+            const resultText = document.getElementById("result-text");
+            const timerContainer = document.getElementById("timer-container");
+            
+            if (isNaN(newFSBS) || newFSBS < 10) {
+                alert("Please enter a valid FSBS number.");
+                return;
+            }
+            if (selectedColIndex === -1) {
+                alert("Please select the CURRENT rate on the grid first.");
+                return;
+            }
+
+            clearInterval(timerInterval);
+            document.getElementById("alarm-sound").pause();
+            timerContainer.style.display = "none";
 
             let targetRowIndex = getRowIndex(newFSBS);
             let targetColIndex = selectedColIndex;
@@ -109,36 +183,36 @@
                 actionTaken = "FSBS is in Target Zone (141-180): Stay in the same column.";
             }
             else {
-                // FSBS > 180. Compare to previous row.
-                // Note: Lower index = Higher blood sugar row
                 if (targetRowIndex > selectedRowIndex) { 
-                    // Current BG row is LOWER than previous BG row
                     targetColIndex = selectedColIndex;
                     actionTaken = "Current BG Row is lower than previous row: Stay in the same column.";
                 } else {
-                    // Current BG row is SAME or HIGHER than previous row
                     targetColIndex = selectedColIndex + 1;
                     actionTaken = "Current BG Row is same or higher than previous row: Move 1 column to the right.";
                 }
             }
 
-            // Calculate final rate
             let finalRate = (newFSBS < 110) ? 0 : getRateValue(targetRowIndex, targetColIndex);
             
-            // Output the result
             resultBox.className = alertClass;
             resultBox.style.display = "block";
             
             if (newFSBS < 110) {
-                resultBox.innerHTML = `<strong>ACTION REQUIRED:</strong> ${actionTaken}<br><em>(When restarting, the new rate in Column ${targetColIndex} will be ${getRateValue(targetRowIndex, targetColIndex)} ml/hr).</em>`;
+                resultText.innerHTML = `<strong>ACTION REQUIRED:</strong> ${actionTaken}<br><em>(When restarting, the new rate in Column ${targetColIndex} will be ${getRateValue(targetRowIndex, targetColIndex)} ml/hr).</em>`;
+                // Show Timer elements
+                timerContainer.style.display = "block";
+                document.getElementById("start-timer-btn").style.display = "inline-block";
+                document.getElementById("timer-display").style.display = "none";
+                document.getElementById("stop-alarm-btn").style.display = "none";
+                
             } else {
                 let mathNote = targetColIndex > 16 ? ` <em>(Calculated as Col 16 + Col ${targetColIndex - 16})</em>` : "";
-                resultBox.innerHTML = `<strong>NEW RATE: ${finalRate} ml/hr</strong> (Column ${targetColIndex}, Row ${gridData[targetRowIndex][0]})${mathNote}<br><br><strong>Why:</strong> ${actionTaken}`;
+                resultText.innerHTML = `<strong>NEW RATE: ${finalRate} ml/hr</strong> (Column ${targetColIndex}, Row ${gridData[targetRowIndex][0]})${mathNote}<br><br><strong>Why:</strong> ${actionTaken}`;
             }
 
-            // Highlight the target cell on the grid if it's column <= 16
+            // Highlight target
             document.querySelectorAll(".cell-btn").forEach(btn => btn.classList.remove("target"));
-            if (targetColIndex <= 16) {
+            if (targetColIndex <= 16 && newFSBS >= 110) {
                 document.querySelectorAll(".cell-btn").forEach(btn => {
                     if (parseInt(btn.getAttribute("data-rindex")) === targetRowIndex && parseInt(btn.getAttribute("data-col")) === targetColIndex) {
                         btn.classList.add("target");
@@ -146,23 +220,72 @@
                 });
             }
         }
+        
+        // TIMER LOGIC
+        function startHypoTimer() {
+            document.getElementById("start-timer-btn").style.display = "none";
+            const timerDisplay = document.getElementById("timer-display");
+            timerDisplay.style.display = "block";
+            timerDisplay.innerText = "30:00";
+            
+            let timeLeft = 30 * 60; // 30 mins in seconds
+            
+            clearInterval(timerInterval);
+            timerInterval = setInterval(function() {
+                timeLeft--;
+                
+                let minutes = Math.floor(timeLeft / 60);
+                let seconds = timeLeft % 60;
+                
+                if (seconds < 10) seconds = "0" + seconds;
+                
+                timerDisplay.innerText = `${minutes}:${seconds}`;
+                
+                if (timeLeft <= 0) {
+                    clearInterval(timerInterval);
+                    timerDisplay.innerText = "RECHECK FSBS NOW!";
+                    timerDisplay.style.color = "#ff3333";
+                    document.getElementById("alarm-sound").play();
+                    document.getElementById("stop-alarm-btn").style.display = "inline-block";
+                }
+            }, 1000);
+        }
+        
+        function stopAlarm() {
+            document.getElementById("alarm-sound").pause();
+            document.getElementById("alarm-sound").currentTime = 0;
+            document.getElementById("stop-alarm-btn").style.display = "none";
+            document.getElementById("timer-display").innerText = "Timer Stopped";
+            document.getElementById("timer-display").style.color = "#721c24";
+        }
 
-        // Allow Enter key to trigger calculation
+        // Allow Enter key to trigger calculation (defaults to Adjustment calc if a grid cell is selected, else New Start if not)
         document.getElementById("new-fsbs").addEventListener("keypress", function(event) {
             if (event.key === "Enter") {
                 event.preventDefault();
-                calculateNewRate();
+                if(selectedColIndex !== -1) {
+                    calculateNewRate();
+                } else if(this.value.length > 0) {
+                    calculateNewStart();
+                }
             }
         });
 
         function resetCalculator() {
             selectedRowIndex = -1;
             selectedColIndex = -1;
+            clearInterval(timerInterval);
+            document.getElementById("alarm-sound").pause();
+            
             document.getElementById("display-current").innerText = "None (Click the grid below)";
             document.getElementById("display-current").style.color = "#0056b3";
             document.getElementById("new-fsbs").value = "";
-            document.getElementById("new-fsbs").disabled = true;
             document.getElementById("calc-btn").disabled = true;
+            document.getElementById("start-btn").disabled = true;
+            
             document.getElementById("result-box").style.display = "none";
+            document.getElementById("timer-container").style.display = "none";
+            document.getElementById("timer-display").style.color = "black";
+            
             document.querySelectorAll(".cell-btn").forEach(btn => btn.classList.remove("selected", "target"));
         }
