@@ -5,8 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Insulin Drip Calculator</title>
     
-    <!-- Added ?v=1.0 to force fresh CSS load -->
-    <link rel="stylesheet" href="style.css?v=1.0">
+    <link rel="stylesheet" href="style.css?v=1.1">
 </head>
 <body>
 
@@ -24,13 +23,27 @@
                 2. Enter New FSBS (mg/dL): <input type="number" id="new-fsbs" placeholder="e.g. 155" disabled>
             </div>
         </div>
-        <div>
-            <button class="btn-calc" onclick="calculateNewRate()" id="calc-btn" disabled>Calculate New Rate</button>
-            <button class="btn-reset" onclick="resetCalculator()">Reset</button>
+        <div style="display: flex; flex-direction: column; gap: 10px;">
+            <button class="btn-calc" onclick="calculateNewRate()" id="calc-btn" disabled>Calculate Rate Adjustment</button>
+            <button class="btn-new-start" onclick="calculateNewStart()" id="start-btn" disabled>Calculate NEW Infusion Start</button>
+            <button class="btn-reset" onclick="resetCalculator()">Reset Grid</button>
         </div>
         
-        <div id="result-box"></div>
+        <div id="result-box">
+            <span id="result-text"></span>
+            <!-- Timer container hidden by default -->
+            <div id="timer-container" style="display: none; margin-top: 15px; text-align: center;">
+                <button class="btn-timer" id="start-timer-btn" onclick="startHypoTimer()">Start 30 Min Recheck Timer</button>
+                <div id="timer-display" style="font-size: 32px; font-weight: bold; margin-top: 10px; display: none;">30:00</div>
+                <button class="btn-stop-alarm" id="stop-alarm-btn" onclick="stopAlarm()" style="display: none;">Stop Alarm</button>
+            </div>
+        </div>
     </div>
+
+    <!-- Hidden audio element for the timer alarm -->
+    <audio id="alarm-sound" loop>
+        <source src="https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3" type="audio/mpeg">
+    </audio>
 
     <div class="table-container">
         <table id="drip-table">
@@ -44,7 +57,7 @@
         </table>
     </div>
 
-    <script src="data.js?v=1.0"></script>
-    <script src="calculator.js?v=1.0"></script>
+    <script src="data.js?v=1.1"></script>
+    <script src="calculator.js?v=1.1"></script>
 </body>
 </html>
