@@ -21,15 +21,11 @@ let selectedRowIndex = -1;
             tbody.appendChild(tr);
         });
 
-        // Unlock Inputs without needing grid selection (For New Starts)
+        // Unlock Input
         document.getElementById("new-fsbs").addEventListener("input", function() {
             if(this.value.length > 0) {
-                document.getElementById("start-btn").disabled = false;
-                if(selectedColIndex !== -1) {
-                    document.getElementById("calc-btn").disabled = false;
-                }
+                document.getElementById("calc-btn").disabled = false;
             } else {
-                document.getElementById("start-btn").disabled = true;
                 document.getElementById("calc-btn").disabled = true;
             }
         });
@@ -39,7 +35,7 @@ let selectedRowIndex = -1;
         // Grid Click Listener (For Manual Adjustments)
         document.querySelector("tbody").addEventListener("click", function(e) {
             if (e.target && e.target.nodeName === "BUTTON") {
-                isHeld = false; // Manually clicking the grid resets a hold state
+                isHeld = false; 
                 
                 document.querySelectorAll(".cell-btn").forEach(btn => btn.classList.remove("selected", "target"));
                 document.getElementById("result-box").style.display = "none";
@@ -55,12 +51,26 @@ let selectedRowIndex = -1;
                 
                 document.getElementById("display-current").innerHTML = `${currentVal} ml/hr (Column ${selectedColIndex}, Row ${rowLabel}) <br><span style="font-size: 14px; color: #6c757d;">(Manual Selection)</span>`;
                 
+                // Transform button to Adjustment Mode
+                const calcBtn = document.getElementById("calc-btn");
+                calcBtn.innerText = "Calculate Rate Adjustment";
+                calcBtn.style.backgroundColor = "#0056b3"; // Blue
+                
                 if(document.getElementById("new-fsbs").value.length > 0) {
-                    document.getElementById("calc-btn").disabled = false;
+                    calcBtn.disabled = false;
                 }
                 document.getElementById("new-fsbs").select();
             }
         });
+
+        // Smart Router: Determines which logic to run based on grid state
+        function processCalculation() {
+            if (selectedColIndex === -1 && !isHeld) {
+                calculateNewStart();
+            } else {
+                calculateNewRate();
+            }
+        }
 
         // Helper: Convert FSBS number to Row Index
         function getRowIndex(fsbs) {
@@ -114,9 +124,13 @@ let selectedRowIndex = -1;
                 });
             }
             
-            // Auto-highlight the input text so user can just keep typing
+            // Keep button in Adjustment Mode for chaining
+            const calcBtn = document.getElementById("calc-btn");
+            calcBtn.innerText = "Calculate Rate Adjustment";
+            calcBtn.style.backgroundColor = "#0056b3"; // Blue
+            calcBtn.disabled = false;
+
             document.getElementById("new-fsbs").select();
-            document.getElementById("calc-btn").disabled = false;
         }
         
         // NEW START LOGIC
@@ -143,7 +157,7 @@ let selectedRowIndex = -1;
             
             if (newFSBS < 110) {
                 isHeld = true;
-                targetColIndex = 1; // 1 col left of 2 for when it restarts
+                targetColIndex = 1; 
                 resultBox.className = "result-danger";
                 resultText.innerHTML = `<strong>ACTION REQUIRED: DO NOT START INFUSION.</strong><br>FSBS is < 110. Recheck in 30 minutes. Once FSBS > 120, you will start the drip in Column 1.`;
                 timerContainer.style.display = "block";
@@ -156,7 +170,6 @@ let selectedRowIndex = -1;
                 resultText.innerHTML = `<strong>NEW START RATE: ${finalRate} ml/hr</strong> (Column 2, Row ${gridData[targetRowIndex][0]})<br><br><strong>Why:</strong> New continuous insulin infusions always begin in Column 2.`;
             }
             
-            // Auto-update variables for the next hour calculation
             selectedRowIndex = targetRowIndex;
             selectedColIndex = targetColIndex;
             updateCurrentUI();
@@ -173,10 +186,6 @@ let selectedRowIndex = -1;
                 alert("Please enter a valid FSBS number.");
                 return;
             }
-            if (selectedColIndex === -1) {
-                alert("Please select the CURRENT rate on the grid first.");
-                return;
-            }
 
             clearInterval(timerInterval);
             document.getElementById("alarm-sound").pause();
@@ -187,12 +196,11 @@ let selectedRowIndex = -1;
             let actionTaken = "";
             let alertClass = "result-success";
 
-            // Rules Logic
             if (isHeld) {
                 if (newFSBS <= 120) {
                     alertClass = "result-danger";
                     actionTaken = "<strong>DO NOT RESTART YET.</strong> FSBS must be > 120 to restart the infusion. Keep holding and recheck.";
-                    targetRowIndex = selectedRowIndex; // Stay on the hold row
+                    targetRowIndex = selectedRowIndex; 
                 } else {
                     actionTaken = "Restarting from Hold: Resuming 1 column to the left of the pre-hold column.";
                     isHeld = false;
@@ -239,7 +247,6 @@ let selectedRowIndex = -1;
                 resultText.innerHTML = `<strong>NEW RATE: ${finalRate} ml/hr</strong> (Column ${targetColIndex}, Row ${gridData[targetRowIndex][0]})${mathNote}<br><br><strong>Why:</strong> ${actionTaken}`;
             }
 
-            // Auto-update variables for the next hour calculation
             selectedRowIndex = targetRowIndex;
             selectedColIndex = targetColIndex;
             updateCurrentUI();
@@ -252,7 +259,7 @@ let selectedRowIndex = -1;
             timerDisplay.style.display = "block";
             timerDisplay.innerText = "30:00";
             
-            let timeLeft = 30 * 60; // 30 mins
+            let timeLeft = 30 * 60; 
             
             clearInterval(timerInterval);
             timerInterval = setInterval(function() {
@@ -281,14 +288,12 @@ let selectedRowIndex = -1;
             document.getElementById("timer-display").style.color = "#721c24";
         }
 
-        // ENTER KEY HANDLER (Chains calculations smoothly)
+        // ENTER KEY HANDLER (Routes to smart function)
         document.getElementById("new-fsbs").addEventListener("keypress", function(event) {
             if (event.key === "Enter") {
                 event.preventDefault();
-                if(selectedColIndex !== -1) {
-                    calculateNewRate();
-                } else if(this.value.length > 0) {
-                    calculateNewStart();
+                if(this.value.length > 0) {
+                    processCalculation();
                 }
             }
         });
@@ -304,8 +309,12 @@ let selectedRowIndex = -1;
             document.getElementById("display-current").innerText = "None (Click the grid below)";
             document.getElementById("display-current").style.color = "#0056b3";
             document.getElementById("new-fsbs").value = "";
-            document.getElementById("calc-btn").disabled = true;
-            document.getElementById("start-btn").disabled = true;
+            
+            // Revert button to New Start mode
+            const calcBtn = document.getElementById("calc-btn");
+            calcBtn.innerText = "Calculate NEW Infusion Start";
+            calcBtn.style.backgroundColor = "#17a2b8";
+            calcBtn.disabled = true;
             
             document.getElementById("result-box").style.display = "none";
             document.getElementById("timer-container").style.display = "none";
