@@ -115,14 +115,29 @@ let selectedRowIndex = -1;
             document.getElementById("display-current").innerHTML = `${currentVal} ml/hr (Column ${selectedColIndex}, Row ${rowLabel}) ${statusText}`;
             
             document.querySelectorAll(".cell-btn").forEach(btn => btn.classList.remove("selected", "target"));
-            if (selectedColIndex <= 16) {
-                document.querySelectorAll(".cell-btn").forEach(btn => {
-                    if (parseInt(btn.getAttribute("data-rindex")) === selectedRowIndex && parseInt(btn.getAttribute("data-col")) === selectedColIndex) {
-                        btn.classList.add("selected");
-                        if (!isHeld) btn.classList.add("target");
-                    }
-                });
+            
+            // Array to hold all columns that need highlighting (handles > 16)
+            let colsToHighlight = [];
+            let remaining = selectedColIndex;
+            
+            if (remaining <= 16) {
+                colsToHighlight.push(remaining);
+            } else {
+                while (remaining > 16) {
+                    if (!colsToHighlight.includes(16)) colsToHighlight.push(16);
+                    remaining -= 16;
+                }
+                if (remaining > 0) {
+                    colsToHighlight.push(remaining);
+                }
             }
+
+            document.querySelectorAll(".cell-btn").forEach(btn => {
+                if (parseInt(btn.getAttribute("data-rindex")) === selectedRowIndex && colsToHighlight.includes(parseInt(btn.getAttribute("data-col")))) {
+                    btn.classList.add("selected");
+                    if (!isHeld) btn.classList.add("target");
+                }
+            });
             
             // Keep button in Adjustment Mode for chaining
             const calcBtn = document.getElementById("calc-btn");
