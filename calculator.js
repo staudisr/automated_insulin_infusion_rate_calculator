@@ -1,6 +1,7 @@
 let selectedRowIndex = -1;
         let selectedColIndex = -1;
         let timerInterval;
+        let isHeld = false; // Tracks if the infusion is currently held
 
         // Build Table
         const headerRow = document.getElementById("table-headers");
@@ -33,19 +34,18 @@ let selectedRowIndex = -1;
             }
         });
         
-        // Initial unlock of FSBS box to allow New Starts without grid clicking
         document.getElementById("new-fsbs").disabled = false;
 
-        // Grid Click Listener (For Adjustments)
+        // Grid Click Listener (For Manual Adjustments)
         document.querySelector("tbody").addEventListener("click", function(e) {
             if (e.target && e.target.nodeName === "BUTTON") {
-                // Remove previous selection
+                isHeld = false; // Manually clicking the grid resets a hold state
+                
                 document.querySelectorAll(".cell-btn").forEach(btn => btn.classList.remove("selected", "target"));
                 document.getElementById("result-box").style.display = "none";
-                clearInterval(timerInterval); // stop any running timer
+                clearInterval(timerInterval); 
                 document.getElementById("alarm-sound").pause();
                 
-                // Highlight new selection
                 e.target.classList.add("selected");
                 
                 selectedRowIndex = parseInt(e.target.getAttribute("data-rindex"));
@@ -53,11 +53,12 @@ let selectedRowIndex = -1;
                 const currentVal = e.target.getAttribute("data-val");
                 const rowLabel = gridData[selectedRowIndex][0];
                 
-                document.getElementById("display-current").innerText = `${currentVal} ml/hr (Column ${selectedColIndex}, Row ${rowLabel})`;
+                document.getElementById("display-current").innerHTML = `${currentVal} ml/hr (Column ${selectedColIndex}, Row ${rowLabel}) <br><span style="font-size: 14px; color: #6c757d;">(Manual Selection)</span>`;
                 
                 if(document.getElementById("new-fsbs").value.length > 0) {
                     document.getElementById("calc-btn").disabled = false;
                 }
+                document.getElementById("new-fsbs").select();
             }
         });
 
@@ -81,8 +82,6 @@ let selectedRowIndex = -1;
         // Helper: Calculate rate (handles columns > 16)
         function getRateValue(rowIndex, colIndex) {
             if (colIndex <= 16) return gridData[rowIndex][colIndex];
-            
-            // If > 16, do the additive math
             let total = 0;
             let remaining = colIndex;
             while (remaining > 16) {
@@ -93,6 +92,31 @@ let selectedRowIndex = -1;
                 total += gridData[rowIndex][remaining];
             }
             return Math.round(total * 10) / 10;
+        }
+
+        // Helper: Auto-Updates the UI for the next calculation
+        function updateCurrentUI() {
+            const currentVal = getRateValue(selectedRowIndex, selectedColIndex);
+            const rowLabel = gridData[selectedRowIndex][0];
+            
+            let statusText = isHeld ? `<br><span style="font-size: 14px; color: #dc3545;">(Auto-Updated: On HOLD - Ready for Recheck)</span>` 
+                                    : `<br><span style="font-size: 14px; color: #28a745;">(Auto-Updated for Next Entry)</span>`;
+            
+            document.getElementById("display-current").innerHTML = `${currentVal} ml/hr (Column ${selectedColIndex}, Row ${rowLabel}) ${statusText}`;
+            
+            document.querySelectorAll(".cell-btn").forEach(btn => btn.classList.remove("selected", "target"));
+            if (selectedColIndex <= 16) {
+                document.querySelectorAll(".cell-btn").forEach(btn => {
+                    if (parseInt(btn.getAttribute("data-rindex")) === selectedRowIndex && parseInt(btn.getAttribute("data-col")) === selectedColIndex) {
+                        btn.classList.add("selected");
+                        if (!isHeld) btn.classList.add("target");
+                    }
+                });
+            }
+            
+            // Auto-highlight the input text so user can just keep typing
+            document.getElementById("new-fsbs").select();
+            document.getElementById("calc-btn").disabled = false;
         }
         
         // NEW START LOGIC
@@ -110,39 +134,35 @@ let selectedRowIndex = -1;
             clearInterval(timerInterval);
             document.getElementById("alarm-sound").pause();
             timerContainer.style.display = "none";
-            document.querySelectorAll(".cell-btn").forEach(btn => btn.classList.remove("selected", "target"));
             
             let targetRowIndex = getRowIndex(newFSBS);
-            
-            // Protocol: New starts always begin in Column 2
-            let targetColIndex = 2;
-            let finalRate = (newFSBS < 110) ? 0 : getRateValue(targetRowIndex, targetColIndex);
+            let targetColIndex = 2; // New starts always in Col 2
             
             resultBox.className = "result-success";
             resultBox.style.display = "block";
             
             if (newFSBS < 110) {
+                isHeld = true;
+                targetColIndex = 1; // 1 col left of 2 for when it restarts
                 resultBox.className = "result-danger";
-                resultText.innerHTML = `<strong>ACTION REQUIRED: DO NOT START INFUSION.</strong><br>FSBS is < 110. Recheck in 30 minutes. Once FSBS > 120, you will start the drip in Column 2 for that specific FSBS.`;
+                resultText.innerHTML = `<strong>ACTION REQUIRED: DO NOT START INFUSION.</strong><br>FSBS is < 110. Recheck in 30 minutes. Once FSBS > 120, you will start the drip in Column 1.`;
                 timerContainer.style.display = "block";
                 document.getElementById("start-timer-btn").style.display = "inline-block";
                 document.getElementById("timer-display").style.display = "none";
                 document.getElementById("stop-alarm-btn").style.display = "none";
             } else {
+                isHeld = false;
+                let finalRate = getRateValue(targetRowIndex, targetColIndex);
                 resultText.innerHTML = `<strong>NEW START RATE: ${finalRate} ml/hr</strong> (Column 2, Row ${gridData[targetRowIndex][0]})<br><br><strong>Why:</strong> New continuous insulin infusions always begin in Column 2.`;
             }
             
-            // Highlight target
-            if (targetColIndex <= 16 && newFSBS >= 110) {
-                document.querySelectorAll(".cell-btn").forEach(btn => {
-                    if (parseInt(btn.getAttribute("data-rindex")) === targetRowIndex && parseInt(btn.getAttribute("data-col")) === targetColIndex) {
-                        btn.classList.add("target");
-                    }
-                });
-            }
+            // Auto-update variables for the next hour calculation
+            selectedRowIndex = targetRowIndex;
+            selectedColIndex = targetColIndex;
+            updateCurrentUI();
         }
 
-        // ADJUSTMENT LOGIC (Existing)
+        // ADJUSTMENT LOGIC
         function calculateNewRate() {
             const newFSBS = parseInt(document.getElementById("new-fsbs").value);
             const resultBox = document.getElementById("result-box");
@@ -168,57 +188,61 @@ let selectedRowIndex = -1;
             let alertClass = "result-success";
 
             // Rules Logic
-            if (newFSBS < 110) {
-                targetColIndex = Math.max(1, selectedColIndex - 1);
-                actionTaken = "<strong>HOLD INFUSION IMMEDIATELY.</strong> Recheck in 30 minutes. Once FSBS > 120, restart 1 column to the left.";
-                alertClass = "result-danger";
-            } 
-            else if (newFSBS < 141) {
-                targetColIndex = Math.max(1, selectedColIndex - 1);
-                actionTaken = "FSBS < 141: Move 1 column to the left.";
-                alertClass = "result-warning";
-            }
-            else if (newFSBS >= 141 && newFSBS <= 180) {
-                targetColIndex = selectedColIndex;
-                actionTaken = "FSBS is in Target Zone (141-180): Stay in the same column.";
-            }
-            else {
-                if (targetRowIndex > selectedRowIndex) { 
-                    targetColIndex = selectedColIndex;
-                    actionTaken = "Current BG Row is lower than previous row: Stay in the same column.";
+            if (isHeld) {
+                if (newFSBS <= 120) {
+                    alertClass = "result-danger";
+                    actionTaken = "<strong>DO NOT RESTART YET.</strong> FSBS must be > 120 to restart the infusion. Keep holding and recheck.";
+                    targetRowIndex = selectedRowIndex; // Stay on the hold row
                 } else {
-                    targetColIndex = selectedColIndex + 1;
-                    actionTaken = "Current BG Row is same or higher than previous row: Move 1 column to the right.";
+                    actionTaken = "Restarting from Hold: Resuming 1 column to the left of the pre-hold column.";
+                    isHeld = false;
+                }
+            } else {
+                if (newFSBS < 110) {
+                    targetColIndex = Math.max(1, selectedColIndex - 1);
+                    actionTaken = "<strong>HOLD INFUSION IMMEDIATELY.</strong> Recheck in 30 minutes. Once FSBS > 120, restart 1 column to the left.";
+                    alertClass = "result-danger";
+                    isHeld = true;
+                } 
+                else if (newFSBS < 141) {
+                    targetColIndex = Math.max(1, selectedColIndex - 1);
+                    actionTaken = "FSBS < 141: Move 1 column to the left.";
+                    alertClass = "result-warning";
+                }
+                else if (newFSBS >= 141 && newFSBS <= 180) {
+                    targetColIndex = selectedColIndex;
+                    actionTaken = "FSBS is in Target Zone (141-180): Stay in the same column.";
+                }
+                else {
+                    if (targetRowIndex > selectedRowIndex) { 
+                        targetColIndex = selectedColIndex;
+                        actionTaken = "Current BG Row is lower than previous row: Stay in the same column.";
+                    } else {
+                        targetColIndex = selectedColIndex + 1;
+                        actionTaken = "Current BG Row is same or higher than previous row: Move 1 column to the right.";
+                    }
                 }
             }
 
-            let finalRate = (newFSBS < 110) ? 0 : getRateValue(targetRowIndex, targetColIndex);
-            
             resultBox.className = alertClass;
             resultBox.style.display = "block";
             
-            if (newFSBS < 110) {
-                resultText.innerHTML = `<strong>ACTION REQUIRED:</strong> ${actionTaken}<br><em>(When restarting, the new rate in Column ${targetColIndex} will be ${getRateValue(targetRowIndex, targetColIndex)} ml/hr).</em>`;
-                // Show Timer elements
+            if (isHeld) {
+                resultText.innerHTML = `<strong>ACTION REQUIRED:</strong> ${actionTaken}`;
                 timerContainer.style.display = "block";
                 document.getElementById("start-timer-btn").style.display = "inline-block";
                 document.getElementById("timer-display").style.display = "none";
                 document.getElementById("stop-alarm-btn").style.display = "none";
-                
             } else {
+                let finalRate = getRateValue(targetRowIndex, targetColIndex);
                 let mathNote = targetColIndex > 16 ? ` <em>(Calculated as Col 16 + Col ${targetColIndex - 16})</em>` : "";
                 resultText.innerHTML = `<strong>NEW RATE: ${finalRate} ml/hr</strong> (Column ${targetColIndex}, Row ${gridData[targetRowIndex][0]})${mathNote}<br><br><strong>Why:</strong> ${actionTaken}`;
             }
 
-            // Highlight target
-            document.querySelectorAll(".cell-btn").forEach(btn => btn.classList.remove("target"));
-            if (targetColIndex <= 16 && newFSBS >= 110) {
-                document.querySelectorAll(".cell-btn").forEach(btn => {
-                    if (parseInt(btn.getAttribute("data-rindex")) === targetRowIndex && parseInt(btn.getAttribute("data-col")) === targetColIndex) {
-                        btn.classList.add("target");
-                    }
-                });
-            }
+            // Auto-update variables for the next hour calculation
+            selectedRowIndex = targetRowIndex;
+            selectedColIndex = targetColIndex;
+            updateCurrentUI();
         }
         
         // TIMER LOGIC
@@ -228,17 +252,15 @@ let selectedRowIndex = -1;
             timerDisplay.style.display = "block";
             timerDisplay.innerText = "30:00";
             
-            let timeLeft = 30 * 60; // 30 mins in seconds
+            let timeLeft = 30 * 60; // 30 mins
             
             clearInterval(timerInterval);
             timerInterval = setInterval(function() {
                 timeLeft--;
-                
                 let minutes = Math.floor(timeLeft / 60);
                 let seconds = timeLeft % 60;
                 
                 if (seconds < 10) seconds = "0" + seconds;
-                
                 timerDisplay.innerText = `${minutes}:${seconds}`;
                 
                 if (timeLeft <= 0) {
@@ -259,7 +281,7 @@ let selectedRowIndex = -1;
             document.getElementById("timer-display").style.color = "#721c24";
         }
 
-        // Allow Enter key to trigger calculation (defaults to Adjustment calc if a grid cell is selected, else New Start if not)
+        // ENTER KEY HANDLER (Chains calculations smoothly)
         document.getElementById("new-fsbs").addEventListener("keypress", function(event) {
             if (event.key === "Enter") {
                 event.preventDefault();
@@ -271,9 +293,11 @@ let selectedRowIndex = -1;
             }
         });
 
+        // RESET 
         function resetCalculator() {
             selectedRowIndex = -1;
             selectedColIndex = -1;
+            isHeld = false;
             clearInterval(timerInterval);
             document.getElementById("alarm-sound").pause();
             
