@@ -14,6 +14,14 @@ let selectedRowIndex = -1;
         const tbody = document.querySelector("#drip-table tbody");
         gridData.forEach((row, index) => {
             const tr = document.createElement("tr");
+            
+            // Apply special row highlighting based on the row label
+            if (row[0] === "163-180" || row[0] === "141-162") {
+                tr.classList.add("target-zone");
+            } else if (row[0] === "<110") {
+                tr.classList.add("danger-zone");
+            }
+            
             tr.innerHTML += `<td class="bg-row">${row[0]}</td>`;
             for(let i = 1; i <= 16; i++) {
                 tr.innerHTML += `<td><button class="cell-btn" data-rindex="${index}" data-col="${i}" data-val="${row[i]}">${row[i]}</button></td>`;
